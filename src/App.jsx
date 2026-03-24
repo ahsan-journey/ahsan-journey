@@ -360,6 +360,167 @@ function HealthPage({ user }) {
   )
 }
 
+function FinancePage({ user }) {
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
+  const [type, setType] = useState('expense')
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function loadEntries() {
+    if (!supabase || !user?.id) return
+
+    const { data, error } = await supabase
+      .from('finance_entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEntries(data || [])
+  }
+
+  useEffect(() => {
+    loadEntries()
+  }, [user?.id])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    const { error } = await supabase.from('finance_entries').insert({
+      user_id: user.id,
+      entry_date: entryDate,
+      type,
+      amount: Number(amount),
+      note,
+    })
+
+    if (error) {
+      setMessage(error.message)
+      setLoading(false)
+      return
+    }
+
+    setAmount('')
+    setNote('')
+    setMessage('Finance entry saved successfully.')
+    setLoading(false)
+    loadEntries()
+  }
+
+  const totalIncome = entries
+    .filter((item) => item.type === 'income')
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+
+  const totalExpense = entries
+    .filter((item) => item.type === 'expense')
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+
+  const balance = totalIncome - totalExpense
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Finance</h1>
+          <p>Track your income and expenses.</p>
+        </div>
+      </div>
+
+      <div className="stats-grid">
+        <StatCard label="Total Income" value={`৳ ${totalIncome.toFixed(2)}`} note="All saved income entries" />
+        <StatCard label="Total Expense" value={`৳ ${totalExpense.toFixed(2)}`} note="All saved expense entries" />
+        <StatCard label="Balance" value={`৳ ${balance.toFixed(2)}`} note="Income minus expense" />
+        <StatCard label="Entries" value={String(entries.length)} note="Total finance records" />
+      </div>
+
+      <div className="content-grid">
+        <section className="card">
+          <h2>Add Finance Entry</h2>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div>
+              <label>Date</label>
+              <input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label>Type</label>
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Amount</label>
+              <input
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 500"
+                required
+              />
+            </div>
+
+            <div>
+              <label>Note</label>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. groceries, salary, transport"
+              />
+            </div>
+
+            <button type="submit" className="primary-btn" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Entry'}
+            </button>
+          </form>
+
+          {message ? <p className="auth-message">{message}</p> : null}
+        </section>
+
+        <section className="card">
+          <h2>Saved Finance Entries</h2>
+
+          <div className="list">
+            {entries.length === 0 ? (
+              <p className="auth-message">No entries yet.</p>
+            ) : (
+              entries.map((entry) => (
+                <div className="list-item" key={entry.id}>
+                  <div>
+                    <strong>{entry.entry_date}</strong>
+                    <p>
+                      {entry.type.toUpperCase()} · ৳ {Number(entry.amount).toFixed(2)}
+                    </p>
+                    {entry.note ? <p>{entry.note}</p> : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 function PlaceholderPage({ title, text }) {
   return (
     <div className="page">
@@ -389,7 +550,7 @@ function AppShell({ user, onLogout }) {
         <Route path="/health" element={<HealthPage user={user} />} />
         <Route path="/exercise" element={<PlaceholderPage title="Exercise" text="Exercise library, demo media, and tracking." />} />
         <Route path="/prayer" element={<PlaceholderPage title="Prayer" text="Bangladesh and Germany city-based prayer times." />} />
-        <Route path="/finance" element={<PlaceholderPage title="Finance" text="Income, expenses, categories, and summaries." />} />
+        <Route path="/finance" element={<FinancePage user={user} />} />
         <Route path="/focus" element={<PlaceholderPage title="Focus" text="Pomodoro timer and session tracking." />} />
         <Route path="/journal" element={<PlaceholderPage title="Journal" text="Daily reflections, notes, and photos." />} />
         <Route path="/ai-insights" element={<PlaceholderPage title="AI Insights & Compare" text="Analyze, compare, and summarize your data." />} />
