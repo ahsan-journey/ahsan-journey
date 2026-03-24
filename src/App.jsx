@@ -571,7 +571,9 @@ function FinancePage({ user }) {
 }
 
 function GoalsPage({ user }) {
-  const [goalDate, setGoalDate] = useState(new Date().toISOString().slice(0, 10))
+  const today = new Date().toISOString().slice(0, 10)
+
+  const [goalDate, setGoalDate] = useState(today)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('Deen')
   const [priority, setPriority] = useState('medium')
@@ -580,6 +582,7 @@ function GoalsPage({ user }) {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [editingId, setEditingId] = useState(null)
 
   async function loadEntries() {
     if (!supabase || !user?.id) return
@@ -588,7 +591,7 @@ function GoalsPage({ user }) {
       .from('daily_goals')
       .select('*')
       .eq('user_id', user.id)
-      .order('goal_date', { ascending: false })
+      .eq('goal_date', today)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -603,36 +606,126 @@ function GoalsPage({ user }) {
     loadEntries()
   }, [user?.id])
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setLoading(true)
-    setMessage('')
-
-    const { error } = await supabase.from('daily_goals').insert({
-      user_id: user.id,
-      title,
-      category,
-      goal_date: goalDate,
-      priority,
-      status,
-      progress: status === 'done' ? 100 : status === 'in progress' ? 50 : 0,
-      notes,
-    })
-
-    if (error) {
-      setMessage(error.message)
-      setLoading(false)
-      return
-    }
-
+  function resetForm() {
+    setGoalDate(today)
     setTitle('')
     setCategory('Deen')
     setPriority('medium')
     setStatus('pending')
     setNotes('')
-    setMessage('Daily goal saved successfully.')
+    setEditingId(null)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    const progress =
+      status === 'done' ? 100 : status === 'in progress' ? 50 : 0
+
+    if (editingId) {
+      const { error } = await supabase
+        .from('daily_goals')
+        .update({
+          title,
+          category,
+          goal_date: goalDate,
+          priority,
+          status,
+          progress,
+          notes,
+        })
+        .eq('id', editingId)
+        .eq('user_id', user.id)
+
+      if (error) {
+        setMessage(error.message)
+        setLoading(false)
+        return
+      }
+
+      setMessage('Daily goal updated successfully.')
+    } else {
+      const { error } = await supabase.from('daily_goals').insert({
+        user_id: user.id,
+        title,
+        category,
+        goal_date: goalDate,
+        priority,
+        status,
+        progress,
+        notes,
+      })
+
+      if (error) {
+        setMessage(error.message)
+        setLoading(false)
+        return
+      }
+
+      setMessage('Daily goal saved successfully.')
+    }
+
+    resetForm()
     setLoading(false)
     loadEntries()
+  }
+
+  async function toggleGoal(entry) {
+    const newStatus = entry.status === 'done' ? 'pending' : 'done'
+    const newProgress = newStatus === 'done' ? 100 : 0
+
+    const { error } = await supabase
+      .from('daily_goals')
+      .update({
+        status: newStatus,
+        progress: newProgress,
+      })
+      .eq('id', entry.id)
+      .eq('user_id', user.id)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    loadEntries()
+  }
+
+  async function deleteGoal(id) {
+    const confirmDelete = window.confirm('Delete this goal?')
+    if (!confirmDelete) return
+
+    const { error } = await supabase
+      .from('daily_goals')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    if (editingId === id) {
+      resetForm()
+    }
+
+    setMessage('Goal deleted successfully.')
+    loadEntries()
+  }
+
+  function editGoal(entry) {
+    setEditingId(entry.id)
+    setGoalDate(entry.goal_date || today)
+    setTitle(entry.title || '')
+    setCategory(entry.category || 'Deen')
+    setPriority(entry.priority || 'medium')
+    setStatus(entry.status || 'pending')
+    setNotes(entry.notes || '')
+    setMessage('Editing selected goal.')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const totalGoals = entries.length
@@ -645,12 +738,16 @@ function GoalsPage({ user }) {
       <div className="page-header">
         <div>
           <h1>Goals</h1>
-          <p>Track your daily goals and progress.</p>
+          <p>Today’s daily goal checklist.</p>
         </div>
       </div>
 
+      <div className="top-actions">
+        <a className="secondary-btn" href="/weekly-goals">Open Weekly Goals</a>
+      </div>
+
       <div className="stats-grid">
-        <StatCard label="Total Goals" value={String(totalGoals)} note="All saved daily goals" />
+        <StatCard label="Total Goals" value={String(totalGoals)} note="Today’s goals" />
         <StatCard label="Done" value={String(doneGoals)} note="Completed goals" />
         <StatCard label="In Progress" value={String(progressGoals)} note="Ongoing goals" />
         <StatCard label="Pending" value={String(pendingGoals)} note="Not started yet" />
@@ -658,7 +755,7 @@ function GoalsPage({ user }) {
 
       <div className="content-grid">
         <section className="card">
-          <h2>Add Daily Goal</h2>
+          <h2>{editingId ? 'Edit Daily Goal' : 'Add Daily Goal'}</h2>
 
           <form onSubmit={handleSubmit} className="auth-form">
             <div>
@@ -720,29 +817,73 @@ function GoalsPage({ user }) {
               />
             </div>
 
-            <button type="submit" className="primary-btn" disabled={loading}>
-              {loading ? 'Saving...' : 'Save Goal'}
-            </button>
+            <div className="pomodoro-actions">
+              <button type="submit" className="primary-btn" disabled={loading}>
+                {loading ? 'Saving...' : editingId ? 'Update Goal' : 'Save Goal'}
+              </button>
+
+              {editingId ? (
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={resetForm}
+                >
+                  Cancel Edit
+                </button>
+              ) : null}
+            </div>
           </form>
 
           {message ? <p className="auth-message">{message}</p> : null}
         </section>
 
         <section className="card">
-          <h2>Saved Daily Goals</h2>
+          <h2>Today’s Checklist</h2>
 
           <div className="list">
             {entries.length === 0 ? (
-              <p className="auth-message">No goals yet.</p>
+              <p className="auth-message">No goals yet for today.</p>
             ) : (
               entries.map((entry) => (
                 <div className="list-item" key={entry.id}>
-                  <div>
-                    <strong>{entry.title}</strong>
-                    <p>
-                      {entry.goal_date} · {entry.category} · {entry.priority} · {entry.status}
-                    </p>
-                    {entry.notes ? <p>{entry.notes}</p> : null}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={entry.status === 'done'}
+                      onChange={() => toggleGoal(entry)}
+                    />
+
+                    <div>
+                      <strong
+                        style={{
+                          textDecoration: entry.status === 'done' ? 'line-through' : 'none',
+                        }}
+                      >
+                        {entry.title}
+                      </strong>
+                      <p>
+                        {entry.category} · {entry.priority} · {entry.status}
+                      </p>
+                      {entry.notes ? <p>{entry.notes}</p> : null}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => editGoal(entry)}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => deleteGoal(entry.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))
