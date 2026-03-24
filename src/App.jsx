@@ -141,7 +141,56 @@ function DashboardPage({ user }) {
 
       <div className="content-grid">
         <section className="card">
-          <h2>Today’s Goals</h2>
+  <h2>Today's Checklist</h2>
+
+  <div className="list">
+    {entries.length === 0 ? (
+      <p className="auth-message">No goals yet.</p>
+    ) : (
+      entries.map((entry) => (
+        <div className="list-item" key={entry.id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input
+              type="checkbox"
+              checked={entry.status === 'done'}
+              onChange={() => toggleGoal(entry)}
+            />
+
+            <div>
+              <strong
+                style={{
+                  textDecoration: entry.status === 'done' ? 'line-through' : 'none',
+                }}
+              >
+                {entry.title}
+              </strong>
+
+              <p>
+                {entry.category} · {entry.priority}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="secondary-btn"
+              onClick={() => editGoal(entry)}
+            >
+              Edit
+            </button>
+
+            <button
+              className="secondary-btn"
+              onClick={() => deleteGoal(entry.id)}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</section>
           <div className="list">
             {mockGoals.map((goal) => (
               <div key={goal.title} className="list-item">
