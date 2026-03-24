@@ -794,6 +794,49 @@ async function generateTodayGoals() {
 
       <div className="content-grid">
         <section className="card">
+  <h2>Add Routine Template</h2>
+
+  <form
+    onSubmit={async (e) => {
+      e.preventDefault()
+
+      if (!title) return
+
+      const { error } = await supabase.from('daily_goal_templates').insert({
+        user_id: user.id,
+        title,
+        category,
+        priority,
+        notes,
+      })
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      setTitle('')
+      setNotes('')
+      setMessage('Template added successfully.')
+    }}
+    className="auth-form"
+  >
+    <div>
+      <label>Template Title</label>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="e.g. Fajr prayer"
+        required
+      />
+    </div>
+
+    <button type="submit" className="primary-btn">
+      Add Template
+    </button>
+  </form>
+</section>
+        <section className="card">
           <h2>{editingId ? 'Edit Daily Goal' : 'Add Daily Goal'}</h2>
 
           <form onSubmit={handleSubmit} className="auth-form">
