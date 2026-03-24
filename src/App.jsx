@@ -521,6 +521,388 @@ function FinancePage({ user }) {
   )
 }
 
+function GoalsPage({ user }) {
+  const [goalDate, setGoalDate] = useState(new Date().toISOString().slice(0, 10))
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState('Deen')
+  const [priority, setPriority] = useState('medium')
+  const [status, setStatus] = useState('pending')
+  const [notes, setNotes] = useState('')
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function loadEntries() {
+    if (!supabase || !user?.id) return
+
+    const { data, error } = await supabase
+      .from('daily_goals')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('goal_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEntries(data || [])
+  }
+
+  useEffect(() => {
+    loadEntries()
+  }, [user?.id])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    const { error } = await supabase.from('daily_goals').insert({
+      user_id: user.id,
+      title,
+      category,
+      goal_date: goalDate,
+      priority,
+      status,
+      progress: status === 'done' ? 100 : status === 'in progress' ? 50 : 0,
+      notes,
+    })
+
+    if (error) {
+      setMessage(error.message)
+      setLoading(false)
+      return
+    }
+
+    setTitle('')
+    setCategory('Deen')
+    setPriority('medium')
+    setStatus('pending')
+    setNotes('')
+    setMessage('Daily goal saved successfully.')
+    setLoading(false)
+    loadEntries()
+  }
+
+  const totalGoals = entries.length
+  const doneGoals = entries.filter((item) => item.status === 'done').length
+  const pendingGoals = entries.filter((item) => item.status === 'pending').length
+  const progressGoals = entries.filter((item) => item.status === 'in progress').length
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Goals</h1>
+          <p>Track your daily goals and progress.</p>
+        </div>
+      </div>
+
+      <div className="stats-grid">
+        <StatCard label="Total Goals" value={String(totalGoals)} note="All saved daily goals" />
+        <StatCard label="Done" value={String(doneGoals)} note="Completed goals" />
+        <StatCard label="In Progress" value={String(progressGoals)} note="Ongoing goals" />
+        <StatCard label="Pending" value={String(pendingGoals)} note="Not started yet" />
+      </div>
+
+      <div className="content-grid">
+        <section className="card">
+          <h2>Add Daily Goal</h2>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div>
+              <label>Date</label>
+              <input
+                type="date"
+                value={goalDate}
+                onChange={(e) => setGoalDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label>Goal Title</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Pray all 5 on time"
+                required
+              />
+            </div>
+
+            <div>
+              <label>Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="Deen">Deen</option>
+                <option value="Health">Health</option>
+                <option value="Study">Study</option>
+                <option value="Career">Career</option>
+                <option value="Family">Family</option>
+                <option value="Personal">Personal</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Priority</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="pending">Pending</option>
+                <option value="in progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Notes</label>
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </div>
+
+            <button type="submit" className="primary-btn" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Goal'}
+            </button>
+          </form>
+
+          {message ? <p className="auth-message">{message}</p> : null}
+        </section>
+
+        <section className="card">
+          <h2>Saved Daily Goals</h2>
+
+          <div className="list">
+            {entries.length === 0 ? (
+              <p className="auth-message">No goals yet.</p>
+            ) : (
+              entries.map((entry) => (
+                <div className="list-item" key={entry.id}>
+                  <div>
+                    <strong>{entry.title}</strong>
+                    <p>
+                      {entry.goal_date} · {entry.category} · {entry.priority} · {entry.status}
+                    </p>
+                    {entry.notes ? <p>{entry.notes}</p> : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function FocusPage({ user }) {
+  const WORK_MINUTES = 25
+  const BREAK_MINUTES = 5
+
+  const [mode, setMode] = useState('work')
+  const [secondsLeft, setSecondsLeft] = useState(WORK_MINUTES * 60)
+  const [isRunning, setIsRunning] = useState(false)
+  const [sessionsCompleted, setSessionsCompleted] = useState(0)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!isRunning) return
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+
+          if (mode === 'work') {
+            const newCount = sessionsCompleted + 1
+            setSessionsCompleted(newCount)
+            savePomodoroSession(newCount)
+            setMode('break')
+            setIsRunning(false)
+            setMessage('Work session completed. Time for a break.')
+            return BREAK_MINUTES * 60
+          } else {
+            setMode('work')
+            setIsRunning(false)
+            setMessage('Break completed. Ready for the next focus session.')
+            return WORK_MINUTES * 60
+          }
+        }
+
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isRunning, mode, sessionsCompleted])
+
+  async function savePomodoroSession(completedCount) {
+    if (!supabase || !user?.id) return
+
+    const today = new Date().toISOString().slice(0, 10)
+
+    const { data: existing, error: fetchError } = await supabase
+      .from('pomodoro_sessions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('session_date', today)
+      .maybeSingle()
+
+    if (fetchError) {
+      setMessage(fetchError.message)
+      return
+    }
+
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from('pomodoro_sessions')
+        .update({
+          sessions_completed: completedCount,
+          work_minutes: WORK_MINUTES,
+          break_minutes: BREAK_MINUTES,
+        })
+        .eq('id', existing.id)
+
+      if (updateError) setMessage(updateError.message)
+    } else {
+      const { error: insertError } = await supabase
+        .from('pomodoro_sessions')
+        .insert({
+          user_id: user.id,
+          session_date: today,
+          work_minutes: WORK_MINUTES,
+          break_minutes: BREAK_MINUTES,
+          sessions_completed: completedCount,
+        })
+
+      if (insertError) setMessage(insertError.message)
+    }
+  }
+
+  function formatTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+
+  function handleStartPause() {
+    setIsRunning((prev) => !prev)
+    setMessage('')
+  }
+
+  function handleReset() {
+    setIsRunning(false)
+    setMode('work')
+    setSecondsLeft(WORK_MINUTES * 60)
+    setMessage('Timer reset.')
+  }
+
+  function switchMode(nextMode) {
+    setIsRunning(false)
+    setMode(nextMode)
+    setSecondsLeft(nextMode === 'work' ? WORK_MINUTES * 60 : BREAK_MINUTES * 60)
+    setMessage('')
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Focus</h1>
+          <p>Pomodoro timer for deep work and breaks.</p>
+        </div>
+      </div>
+
+      <div className="stats-grid">
+        <StatCard
+          label="Mode"
+          value={mode === 'work' ? 'Work' : 'Break'}
+          note="Current timer mode"
+        />
+        <StatCard
+          label="Time Left"
+          value={formatTime(secondsLeft)}
+          note="Current countdown"
+        />
+        <StatCard
+          label="Sessions Completed"
+          value={String(sessionsCompleted)}
+          note="Completed work sessions this session"
+        />
+        <StatCard
+          label="Status"
+          value={isRunning ? 'Running' : 'Paused'}
+          note="Timer state"
+        />
+      </div>
+
+      <div className="content-grid">
+        <section className="card">
+          <h2>Pomodoro Timer</h2>
+
+          <div className="pomodoro-box">
+            <div className="pomodoro-time">{formatTime(secondsLeft)}</div>
+
+            <div className="pomodoro-actions">
+              <button className="primary-btn" onClick={handleStartPause}>
+                {isRunning ? 'Pause' : 'Start'}
+              </button>
+              <button className="secondary-btn" onClick={handleReset}>
+                Reset
+              </button>
+            </div>
+
+            <div className="pomodoro-actions">
+              <button className="secondary-btn" onClick={() => switchMode('work')}>
+                Work
+              </button>
+              <button className="secondary-btn" onClick={() => switchMode('break')}>
+                Break
+              </button>
+            </div>
+
+            {message ? <p className="auth-message">{message}</p> : null}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2>Pomodoro Rules</h2>
+          <div className="list">
+            <div className="list-item">
+              <div>
+                <strong>Work Session</strong>
+                <p>25 minutes deep focus</p>
+              </div>
+            </div>
+            <div className="list-item">
+              <div>
+                <strong>Short Break</strong>
+                <p>5 minutes rest</p>
+              </div>
+            </div>
+            <div className="list-item">
+              <div>
+                <strong>Auto Save</strong>
+                <p>Completed work sessions are saved to your account</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 function PlaceholderPage({ title, text }) {
   return (
     <div className="page">
@@ -546,12 +928,12 @@ function AppShell({ user, onLogout }) {
 
       <Routes>
         <Route path="/" element={<DashboardPage user={user} />} />
-        <Route path="/goals" element={<PlaceholderPage title="Goals" text="Daily, weekly, monthly, and lifetime targets." />} />
+        <Route path="/goals" element={<GoalsPage user={user} />} />
         <Route path="/health" element={<HealthPage user={user} />} />
         <Route path="/exercise" element={<PlaceholderPage title="Exercise" text="Exercise library, demo media, and tracking." />} />
         <Route path="/prayer" element={<PlaceholderPage title="Prayer" text="Bangladesh and Germany city-based prayer times." />} />
         <Route path="/finance" element={<FinancePage user={user} />} />
-        <Route path="/focus" element={<PlaceholderPage title="Focus" text="Pomodoro timer and session tracking." />} />
+        <Route path="/focus" element={<FocusPage user={user} />} />
         <Route path="/journal" element={<PlaceholderPage title="Journal" text="Daily reflections, notes, and photos." />} />
         <Route path="/ai-insights" element={<PlaceholderPage title="AI Insights & Compare" text="Analyze, compare, and summarize your data." />} />
         <Route path="/analytics" element={<PlaceholderPage title="Analytics" text="Charts and trend summaries across modules." />} />
