@@ -10,26 +10,25 @@ export default defineConfig({
       manifest: {
         name: 'Ahsan Journey',
         short_name: 'Journey',
-        description: 'Personal life management app for goals, health, prayer, finance and focus.',
-        theme_color: '#0f172a',
-        background_color: '#020617',
+        description: 'Personal life, health, goals, finance and deen tracker',
+        theme_color: '#0b1220',
+        background_color: '#0b1220',
         display: 'standalone',
+        orientation: 'portrait',
         start_url: '/',
         icons: [
           {
-            src: '/pwa-192.svg',
+            src: '/icon-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
-            purpose: 'any'
+            type: 'image/png',
           },
           {
-            src: '/pwa-512.svg',
+            src: '/icon-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any'
-          }
-        ]
-      }
-    })
-  ]
+            type: 'image/png',
+          },
+        ],
+      },
+    }),
+  ],
 })
