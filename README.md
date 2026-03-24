@@ -1,16 +1,30 @@
-## Hi there 👋
+# Ahsan Journey Starter
 
-<!--
-**ahsan-journey/ahsan-journey** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+This is the starter PWA shell for your personal app.
 
-Here are some ideas to get you started:
+## What is already included
+- React + Vite
+- PWA setup
+- Sidebar navigation for all major modules
+- Dashboard, goals, health, exercise, prayer, finance, focus, journal, AI insights, analytics, settings
+- Demo charts and Pomodoro UI
+- Supabase-ready environment file
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+## Before production use
+You still need to:
+1. Add Supabase database tables
+2. Add storage buckets
+3. Add environment variables
+4. Deploy to Vercel
+
+## Local run (optional)
+```bash
+npm install
+npm run dev
+```
+
+## Build
+```bash
+npm install
+npm run build
+```
