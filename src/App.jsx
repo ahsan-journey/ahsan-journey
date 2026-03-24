@@ -575,6 +575,7 @@ function FinancePage({ user }) {
 function GoalsPage({ user }) {
   const today = new Date().toISOString().slice(0, 10)
 
+  // Daily goal states
   const [goalDate, setGoalDate] = useState(today)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('Deen')
@@ -582,10 +583,15 @@ function GoalsPage({ user }) {
   const [status, setStatus] = useState('pending')
   const [notes, setNotes] = useState('')
   const [entries, setEntries] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
   const [editingId, setEditingId] = useState(null)
 
+  // Template state (separate)
+  const [templateTitle, setTemplateTitle] = useState('')
+
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  // Load today's goals
   async function loadEntries() {
     if (!supabase || !user?.id) return
 
@@ -603,45 +609,45 @@ function GoalsPage({ user }) {
 
     setEntries(data || [])
   }
-async function generateTodayGoals() {
-  if (!supabase || !user?.id) return
 
-  const today = new Date().toISOString().slice(0, 10)
+  // Generate goals from templates
+  async function generateTodayGoals() {
+    if (!supabase || !user?.id) return
 
-  // check if already generated
-  const { data: existing } = await supabase
-    .from('daily_goals')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('goal_date', today)
+    const { data: existing } = await supabase
+      .from('daily_goals')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('goal_date', today)
 
-  if (existing && existing.length > 0) return
+    if (existing && existing.length > 0) return
 
-  // get templates
-  const { data: templates } = await supabase
-    .from('daily_goal_templates')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
+    const { data: templates } = await supabase
+      .from('daily_goal_templates')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
 
-  if (!templates || templates.length === 0) return
+    if (!templates || templates.length === 0) return
 
-  const newGoals = templates.map((t) => ({
-    user_id: user.id,
-    title: t.title,
-    category: t.category,
-    priority: t.priority,
-    notes: t.notes,
-    goal_date: today,
-    status: 'pending',
-    progress: 0,
-  }))
+    const newGoals = templates.map((t) => ({
+      user_id: user.id,
+      title: t.title,
+      category: t.category,
+      priority: t.priority,
+      notes: t.notes,
+      goal_date: today,
+      status: 'pending',
+      progress: 0,
+    }))
 
-  await supabase.from('daily_goals').insert(newGoals)
+    await supabase.from('daily_goals').insert(newGoals)
+    loadEntries()
+  }
 
-  loadEntries()
-}
   useEffect(() => {
+    if (!user?.id) return
+    generateTodayGoals()
     loadEntries()
   }, [user?.id])
 
@@ -655,6 +661,7 @@ async function generateTodayGoals() {
     setEditingId(null)
   }
 
+  // Add or update goal
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
@@ -676,7 +683,6 @@ async function generateTodayGoals() {
           notes,
         })
         .eq('id', editingId)
-        .eq('user_id', user.id)
 
       if (error) {
         setMessage(error.message)
@@ -684,7 +690,7 @@ async function generateTodayGoals() {
         return
       }
 
-      setMessage('Daily goal updated successfully.')
+      setMessage('Goal updated successfully.')
     } else {
       const { error } = await supabase.from('daily_goals').insert({
         user_id: user.id,
@@ -703,7 +709,7 @@ async function generateTodayGoals() {
         return
       }
 
-      setMessage('Daily goal saved successfully.')
+      setMessage('Goal added successfully.')
     }
 
     resetForm()
@@ -711,268 +717,143 @@ async function generateTodayGoals() {
     loadEntries()
   }
 
+  // Toggle checkbox
   async function toggleGoal(entry) {
     const newStatus = entry.status === 'done' ? 'pending' : 'done'
-    const newProgress = newStatus === 'done' ? 100 : 0
 
-    const { error } = await supabase
+    await supabase
       .from('daily_goals')
       .update({
         status: newStatus,
-        progress: newProgress,
+        progress: newStatus === 'done' ? 100 : 0,
       })
       .eq('id', entry.id)
-      .eq('user_id', user.id)
-
-    if (error) {
-      setMessage(error.message)
-      return
-    }
 
     loadEntries()
   }
 
+  // Delete goal
   async function deleteGoal(id) {
-    const confirmDelete = window.confirm('Delete this goal?')
-    if (!confirmDelete) return
+    if (!window.confirm('Delete this goal?')) return
 
-    const { error } = await supabase
-      .from('daily_goals')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id)
-
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    if (editingId === id) {
-      resetForm()
-    }
-
-    setMessage('Goal deleted successfully.')
+    await supabase.from('daily_goals').delete().eq('id', id)
     loadEntries()
   }
 
+  // Edit goal
   function editGoal(entry) {
     setEditingId(entry.id)
-    setGoalDate(entry.goal_date || today)
-    setTitle(entry.title || '')
-    setCategory(entry.category || 'Deen')
-    setPriority(entry.priority || 'medium')
-    setStatus(entry.status || 'pending')
+    setTitle(entry.title)
+    setCategory(entry.category)
+    setPriority(entry.priority)
+    setStatus(entry.status)
     setNotes(entry.notes || '')
-    setMessage('Editing selected goal.')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const totalGoals = entries.length
-  const doneGoals = entries.filter((item) => item.status === 'done').length
-  const pendingGoals = entries.filter((item) => item.status === 'pending').length
-  const progressGoals = entries.filter((item) => item.status === 'in progress').length
+  // Add template
+  async function addTemplate(e) {
+    e.preventDefault()
+
+    if (!templateTitle) return
+
+    const { error } = await supabase.from('daily_goal_templates').insert({
+      user_id: user.id,
+      title: templateTitle,
+      category,
+      priority,
+      notes,
+    })
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setTemplateTitle('')
+    setMessage('Template added.')
+  }
+
+  const total = entries.length
+  const done = entries.filter((e) => e.status === 'done').length
 
   return (
     <div className="page">
       <div className="page-header">
-        <div>
-          <h1>Goals</h1>
-          <p>Today’s daily goal checklist.</p>
-        </div>
-      </div>
-
-      <div className="top-actions">
-        <a className="secondary-btn" href="/weekly-goals">Open Weekly Goals</a>
+        <h1>Daily Goals</h1>
+        <p>Your daily checklist system</p>
       </div>
 
       <div className="stats-grid">
-        <StatCard label="Total Goals" value={String(totalGoals)} note="Today’s goals" />
-        <StatCard label="Done" value={String(doneGoals)} note="Completed goals" />
-        <StatCard label="In Progress" value={String(progressGoals)} note="Ongoing goals" />
-        <StatCard label="Pending" value={String(pendingGoals)} note="Not started yet" />
+        <StatCard label="Total" value={total} />
+        <StatCard label="Done" value={done} />
       </div>
 
       <div className="content-grid">
+
+        {/* TEMPLATE SECTION */}
         <section className="card">
-  <h2>Add Routine Template</h2>
+          <h2>Add Routine Template</h2>
 
-  <form
-    onSubmit={async (e) => {
-      e.preventDefault()
+          <form onSubmit={addTemplate} className="auth-form">
+            <input
+              value={templateTitle}
+              onChange={(e) => setTemplateTitle(e.target.value)}
+              placeholder="e.g. Fajr prayer"
+              required
+            />
+            <button className="primary-btn">Add Template</button>
+          </form>
+        </section>
 
-      if (!title) return
-
-      const { error } = await supabase.from('daily_goal_templates').insert({
-        user_id: user.id,
-        title,
-        category,
-        priority,
-        notes,
-      })
-
-      if (error) {
-        setMessage(error.message)
-        return
-      }
-
-      setTitle('')
-      setNotes('')
-      setMessage('Template added successfully.')
-    }}
-    className="auth-form"
-  >
-    <div>
-      <label>Template Title</label>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="e.g. Fajr prayer"
-        required
-      />
-    </div>
-
-    <button type="submit" className="primary-btn">
-      Add Template
-    </button>
-  </form>
-</section>
+        {/* ADD / EDIT GOAL */}
         <section className="card">
-          <h2>{editingId ? 'Edit Daily Goal' : 'Add Daily Goal'}</h2>
+          <h2>{editingId ? 'Edit Goal' : 'Add Goal'}</h2>
 
           <form onSubmit={handleSubmit} className="auth-form">
-            <div>
-              <label>Date</label>
-              <input
-                type="date"
-                value={goalDate}
-                onChange={(e) => setGoalDate(e.target.value)}
-                required
-              />
-            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Goal title"
+              required
+            />
 
-            <div>
-              <label>Goal Title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Pray all 5 on time"
-                required
-              />
-            </div>
-
-            <div>
-              <label>Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="Deen">Deen</option>
-                <option value="Health">Health</option>
-                <option value="Study">Study</option>
-                <option value="Career">Career</option>
-                <option value="Family">Family</option>
-                <option value="Personal">Personal</option>
-              </select>
-            </div>
-
-            <div>
-              <label>Priority</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-
-            <div>
-              <label>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="pending">Pending</option>
-                <option value="in progress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
-            </div>
-
-            <div>
-              <label>Notes</label>
-              <input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional notes"
-              />
-            </div>
-
-            <div className="pomodoro-actions">
-              <button type="submit" className="primary-btn" disabled={loading}>
-                {loading ? 'Saving...' : editingId ? 'Update Goal' : 'Save Goal'}
-              </button>
-
-              {editingId ? (
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={resetForm}
-                >
-                  Cancel Edit
-                </button>
-              ) : null}
-            </div>
+            <button className="primary-btn">
+              {editingId ? 'Update' : 'Add'}
+            </button>
           </form>
-
-          {message ? <p className="auth-message">{message}</p> : null}
         </section>
 
+        {/* CHECKLIST */}
         <section className="card">
-          <h2>Today’s Checklist</h2>
+          <h2>Today's Checklist</h2>
 
-          <div className="list">
-            {entries.length === 0 ? (
-              <p className="auth-message">No goals yet for today.</p>
-            ) : (
-              entries.map((entry) => (
-                <div className="list-item" key={entry.id}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                    <input
-                      type="checkbox"
-                      checked={entry.status === 'done'}
-                      onChange={() => toggleGoal(entry)}
-                    />
+          {entries.map((entry) => (
+            <div key={entry.id} className="list-item">
+              <input
+                type="checkbox"
+                checked={entry.status === 'done'}
+                onChange={() => toggleGoal(entry)}
+              />
 
-                    <div>
-                      <strong
-                        style={{
-                          textDecoration: entry.status === 'done' ? 'line-through' : 'none',
-                        }}
-                      >
-                        {entry.title}
-                      </strong>
-                      <p>
-                        {entry.category} · {entry.priority} · {entry.status}
-                      </p>
-                      {entry.notes ? <p>{entry.notes}</p> : null}
-                    </div>
-                  </div>
+              <span
+                style={{
+                  textDecoration:
+                    entry.status === 'done' ? 'line-through' : 'none',
+                }}
+              >
+                {entry.title}
+              </span>
 
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => editGoal(entry)}
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => deleteGoal(entry.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+              <button onClick={() => editGoal(entry)}>Edit</button>
+              <button onClick={() => deleteGoal(entry.id)}>Delete</button>
+            </div>
+          ))}
         </section>
+
       </div>
+
+      {message && <p>{message}</p>}
     </div>
   )
 }
