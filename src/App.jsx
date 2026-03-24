@@ -437,8 +437,10 @@ function FinancePage({ user }) {
   }
 
   useEffect(() => {
-    loadEntries()
-  }, [user?.id])
+  if (!user?.id) return
+  generateTodayGoals()
+  loadEntries()
+}, [user?.id])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -601,7 +603,44 @@ function GoalsPage({ user }) {
 
     setEntries(data || [])
   }
+async function generateTodayGoals() {
+  if (!supabase || !user?.id) return
 
+  const today = new Date().toISOString().slice(0, 10)
+
+  // check if already generated
+  const { data: existing } = await supabase
+    .from('daily_goals')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('goal_date', today)
+
+  if (existing && existing.length > 0) return
+
+  // get templates
+  const { data: templates } = await supabase
+    .from('daily_goal_templates')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+
+  if (!templates || templates.length === 0) return
+
+  const newGoals = templates.map((t) => ({
+    user_id: user.id,
+    title: t.title,
+    category: t.category,
+    priority: t.priority,
+    notes: t.notes,
+    goal_date: today,
+    status: 'pending',
+    progress: 0,
+  }))
+
+  await supabase.from('daily_goals').insert(newGoals)
+
+  loadEntries()
+}
   useEffect(() => {
     loadEntries()
   }, [user?.id])
