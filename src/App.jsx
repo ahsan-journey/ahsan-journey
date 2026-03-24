@@ -201,6 +201,165 @@ function DashboardPage({ user }) {
   )
 }
 
+function HealthPage({ user }) {
+  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10))
+  const [weightKg, setWeightKg] = useState('')
+  const [heightCm, setHeightCm] = useState('')
+  const [notes, setNotes] = useState('')
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  function calculateBmi(weight, height) {
+    const w = Number(weight)
+    const h = Number(height)
+    if (!w || !h) return null
+    const meters = h / 100
+    return (w / (meters * meters)).toFixed(2)
+  }
+
+  async function loadEntries() {
+    if (!supabase || !user?.id) return
+
+    const { data, error } = await supabase
+      .from('weight_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('log_date', { ascending: false })
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setEntries(data || [])
+  }
+
+  useEffect(() => {
+    loadEntries()
+  }, [user?.id])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    const bmi = calculateBmi(weightKg, heightCm)
+
+    const { error } = await supabase.from('weight_logs').insert({
+      user_id: user.id,
+      log_date: logDate,
+      weight_kg: Number(weightKg),
+      height_cm: Number(heightCm),
+      bmi: bmi ? Number(bmi) : null,
+      notes,
+    })
+
+    if (error) {
+      setMessage(error.message)
+      setLoading(false)
+      return
+    }
+
+    setWeightKg('')
+    setHeightCm('')
+    setNotes('')
+    setMessage('Weight entry saved successfully.')
+    setLoading(false)
+    loadEntries()
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1>Health</h1>
+          <p>Track your weight, height, BMI, and notes.</p>
+        </div>
+      </div>
+
+      <div className="content-grid">
+        <section className="card">
+          <h2>Add Weight Entry</h2>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div>
+              <label>Date</label>
+              <input
+                type="date"
+                value={logDate}
+                onChange={(e) => setLogDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label>Weight (kg)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={weightKg}
+                onChange={(e) => setWeightKg(e.target.value)}
+                placeholder="e.g. 84.1"
+                required
+              />
+            </div>
+
+            <div>
+              <label>Height (cm)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+                placeholder="e.g. 170"
+                required
+              />
+            </div>
+
+            <div>
+              <label>Notes</label>
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </div>
+
+            <button type="submit" className="primary-btn" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Entry'}
+            </button>
+          </form>
+
+          {message ? <p className="auth-message">{message}</p> : null}
+        </section>
+
+        <section className="card">
+          <h2>Saved Weight Entries</h2>
+
+          <div className="list">
+            {entries.length === 0 ? (
+              <p className="auth-message">No entries yet.</p>
+            ) : (
+              entries.map((entry) => (
+                <div className="list-item" key={entry.id}>
+                  <div>
+                    <strong>{entry.log_date}</strong>
+                    <p>
+                      {entry.weight_kg} kg · {entry.height_cm} cm · BMI {entry.bmi ?? '—'}
+                    </p>
+                    {entry.notes ? <p>{entry.notes}</p> : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 function PlaceholderPage({ title, text }) {
   return (
     <div className="page">
@@ -227,7 +386,7 @@ function AppShell({ user, onLogout }) {
       <Routes>
         <Route path="/" element={<DashboardPage user={user} />} />
         <Route path="/goals" element={<PlaceholderPage title="Goals" text="Daily, weekly, monthly, and lifetime targets." />} />
-        <Route path="/health" element={<PlaceholderPage title="Health" text="Weight logs, BMI, photos, and body measurements." />} />
+        <Route path="/health" element={<HealthPage user={user} />} />
         <Route path="/exercise" element={<PlaceholderPage title="Exercise" text="Exercise library, demo media, and tracking." />} />
         <Route path="/prayer" element={<PlaceholderPage title="Prayer" text="Bangladesh and Germany city-based prayer times." />} />
         <Route path="/finance" element={<PlaceholderPage title="Finance" text="Income, expenses, categories, and summaries." />} />
